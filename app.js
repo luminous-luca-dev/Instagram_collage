@@ -19,6 +19,7 @@ const AppState = {
   bgColor: '#1a1a2e',
   cornerRadius: 8,
   mosaicStrength: 12,
+  mosaicType: 'pixel',
   nextPhotoId: 1,
   isDetecting: false,
 };
@@ -32,23 +33,23 @@ let avatarEditor = null;
 // 初期化
 // ==============================
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
+  // ページを即時表示してから非同期でライブラリをロード
   initCollageEngine();
   initTabs();
   initUpload();
   initLayoutControls();
   initFaceControls();
   initPreviewButtons();
-  initFaceDetector();
 
-  // アバタープリセット読み込み
+  // アバタープリセット読み込み（同期）
   AppState.preset = AvatarModule.loadPreset();
 
-  // アバタープリセットを絵文字画像をプリロード
-  await AvatarModule.preloadAvatarImages(AppState.preset);
-
-  // 初期コラージュ描画（空の状態）
+  // 初期コラージュ描画（空の状態でも即表示）
   redrawCollage();
+
+  // バックグラウンドで非同期ロード開始（ページ表示をブロックしない）
+  startBackgroundLoading();
 });
 
 // ==============================
@@ -310,44 +311,129 @@ function initFaceControls() {
   const mosaicSlider = document.getElementById('mosaic-strength');
   const mosaicValue  = document.getElementById('mosaic-value');
 
+  // 初期値
+  window.AppModule = window.AppModule || {};
+  window.AppModule.mosaicStrength = AppState.mosaicStrength || 12;
+  window.AppModule.mosaicType = AppState.mosaicType || 'pixel';
+
   mosaicSlider.addEventListener('input', () => {
     const v = parseInt(mosaicSlider.value);
     AppState.mosaicStrength = v;
-    // AppModule.mosaicStrength も更新（collage.jsから参照）
-    window.AppModule = window.AppModule || {};
     window.AppModule.mosaicStrength = v;
     mosaicValue.textContent = v;
     redrawCollage();
   });
-}
 
-// ==============================
-// 顔検出初期化
-// ==============================
-
-function initFaceDetector() {
-  faceDetector = new FaceDetector();
-
-  const statusDot  = document.getElementById('status-dot');
-  const statusText = document.getElementById('face-status-text');
-
-  faceDetector.init().then(ready => {
-    if (ready) {
-      statusDot.classList.remove('loading');
-      statusDot.classList.add('ready');
-      statusText.textContent = '顔検出 準備完了';
-
-      // すでに写真がある場合は検出開始
-      if (AppState.photos.length > 0) {
-        detectFacesForAllPhotos();
-      }
-    } else {
-      statusDot.classList.remove('loading');
-      statusDot.classList.add('error');
-      statusText.textContent = '顔検出 利用不可（オフライン？）';
-    }
+  // モザイク種類ボタン
+  const typeBtns = document.querySelectorAll('.mosaic-type-btn');
+  typeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      typeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const type = btn.dataset.type;
+      AppState.mosaicType = type;
+      window.AppModule.mosaicType = type;
+      redrawCollage();
+    });
   });
 }
+
+// ==============================
+// バックグラウンドロード（進捗ゲージ付き）
+// ==============================
+
+function setStep(id, state) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('done', 'active');
+  el.classList.add(state);
+}
+
+function setProgress(pct) {
+  const bar = document.getElementById('model-progress-fill');
+  if (bar) bar.style.width = pct + '%';
+}
+
+async function startBackgroundLoading() {
+  const statusDot  = document.getElementById('status-dot');
+  const statusText = document.getElementById('face-status-text');
+  const progress   = document.getElementById('model-progress');
+
+  // ① face-api.js スクリプトが読み込まれているか確認
+  setStep('step-faceapi', 'active');
+  statusText.textContent = 'face-api.js 確認中…';
+
+  await waitUntil(() => typeof faceapi !== 'undefined', 8000);
+
+  if (typeof faceapi === 'undefined') {
+    statusDot.classList.replace('loading', 'error');
+    statusText.textContent = 'face-api.js 読み込み失敗';
+    setStep('step-faceapi', 'done'); // エラーでも次に進める
+    if (progress) progress.classList.add('hidden');
+    return;
+  }
+
+  setStep('step-faceapi', 'done');
+  setProgress(20);
+
+  // ② SSD Mobilenet モデルロード
+  setStep('step-ssd', 'active');
+  statusText.textContent = '顔検出モデルを読み込み中…';
+
+  faceDetector = new FaceDetector();
+  const ready = await faceDetector.init();
+
+  if (ready) {
+    setStep('step-ssd', 'done');
+    setStep('step-tiny', 'done');
+    setProgress(70);
+  } else {
+    statusDot.classList.replace('loading', 'error');
+    statusText.textContent = '顔検出モデル読み込み失敗';
+    if (progress) progress.classList.add('hidden');
+    return;
+  }
+
+  // ③ 絵文字画像プリロード
+  setStep('step-emoji', 'active');
+  statusText.textContent = '絵文字画像を読み込み中…';
+
+  await AvatarModule.preloadAvatarImages(AppState.preset);
+
+  setStep('step-emoji', 'done');
+  setProgress(100);
+
+  // ④ 完了
+  statusDot.classList.replace('loading', 'ready');
+  statusText.textContent = '準備完了';
+
+  // ゲージをフェードアウト
+  setTimeout(() => {
+    if (progress) progress.classList.add('hidden');
+  }, 1200);
+
+  // 写真が先にアップロードされていたら顔検出を開始
+  if (AppState.photos.length > 0) {
+    detectFacesForAllPhotos();
+  }
+}
+
+/** 条件が満たされるまでポーリング（最大 timeoutMs ミリ秒） */
+function waitUntil(condition, timeoutMs = 5000) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    const check = () => {
+      if (condition() || Date.now() - start >= timeoutMs) {
+        resolve();
+      } else {
+        setTimeout(check, 200);
+      }
+    };
+    check();
+  });
+}
+
+// 旧 initFaceDetector は startBackgroundLoading に統合されたため削除
 
 // ==============================
 // 顔検出実行
@@ -365,10 +451,10 @@ async function detectFacesForAllPhotos() {
   const mappings = collageEngine.getCellPhotoMappings(AppState.photoCount);
 
   for (const mapping of mappings) {
-    const { cell, photo, scaleX, scaleY, cropX, cropY } = mapping;
+    const { cell, photo, scaleX, scaleY, offsetX, offsetY } = mapping;
     try {
       const faces = await faceDetector.detectInCell(
-        photo.imgEl, cell, scaleX, scaleY, cropX, cropY
+        photo.imgEl, cell, scaleX, scaleY, offsetX, offsetY
       );
       AppState.faces.push(...faces);
     } catch (e) {
@@ -433,13 +519,95 @@ function renderFaceList() {
         face.mode = mode;
         modeBtns.querySelectorAll('.face-mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        const rotRow = adjustPanel.querySelector('.adjust-rotation-row');
+        if (rotRow) {
+          if (mode === 'avatar') rotRow.classList.remove('hidden');
+          else rotRow.classList.add('hidden');
+        }
         redrawCollage();
       });
       modeBtns.appendChild(btn);
     });
 
+    // 微調整トグル＆パネル
+    const adjustToggle = document.createElement('button');
+    adjustToggle.className = 'face-adjust-toggle';
+    adjustToggle.innerHTML = '⚙️ 微調整 <span class="arrow">▼</span>';
+
+    const adjustPanel = document.createElement('div');
+    adjustPanel.className = 'face-adjust-panel hidden';
+
+    // 初期値
+    face.override = face.override || { posX: 0, posY: 0, scale: 1.0, rotation: 0 };
+
+    adjustPanel.innerHTML = `
+      <div class="face-adjust-row">
+        <label>位置X: <span class="val-text" id="val-posx-${idx}">${face.override.posX || 0}px</span></label>
+        <input type="range" class="face-slider" min="-150" max="150" value="${face.override.posX || 0}" data-prop="posX" />
+      </div>
+      <div class="face-adjust-row">
+        <label>位置Y: <span class="val-text" id="val-posy-${idx}">${face.override.posY || 0}px</span></label>
+        <input type="range" class="face-slider" min="-150" max="150" value="${face.override.posY || 0}" data-prop="posY" />
+      </div>
+      <div class="face-adjust-row">
+        <label>大きさ: <span class="val-text" id="val-scale-${idx}">${Math.round((face.override.scale || 1.0) * 100)}%</span></label>
+        <input type="range" class="face-slider" min="30" max="250" value="${Math.round((face.override.scale || 1.0) * 100)}" data-prop="scale" />
+      </div>
+      <div class="face-adjust-row adjust-rotation-row ${face.mode === 'avatar' ? '' : 'hidden'}">
+        <label>角度: <span class="val-text" id="val-rot-${idx}">${face.override.rotation || 0}°</span></label>
+        <input type="range" class="face-slider" min="-180" max="180" value="${face.override.rotation || 0}" data-prop="rotation" />
+      </div>
+      <div class="face-adjust-actions">
+        <button type="button" class="face-reset-btn">初期位置に戻す</button>
+      </div>
+    `;
+
+    adjustToggle.addEventListener('click', () => {
+      adjustPanel.classList.toggle('hidden');
+      adjustToggle.classList.toggle('open');
+    });
+
+    // スライダー連動
+    adjustPanel.querySelectorAll('.face-slider').forEach(slider => {
+      slider.addEventListener('input', (e) => {
+        const prop = e.target.dataset.prop;
+        const val = Number(e.target.value);
+        if (prop === 'posX') {
+          face.override.posX = val;
+          adjustPanel.querySelector(`#val-posx-${idx}`).textContent = `${val}px`;
+        } else if (prop === 'posY') {
+          face.override.posY = val;
+          adjustPanel.querySelector(`#val-posy-${idx}`).textContent = `${val}px`;
+        } else if (prop === 'scale') {
+          face.override.scale = val / 100;
+          adjustPanel.querySelector(`#val-scale-${idx}`).textContent = `${val}%`;
+        } else if (prop === 'rotation') {
+          face.override.rotation = val;
+          adjustPanel.querySelector(`#val-rot-${idx}`).textContent = `${val}°`;
+        }
+        redrawCollage();
+      });
+    });
+
+    // リセットボタン
+    adjustPanel.querySelector('.face-reset-btn').addEventListener('click', () => {
+      face.override = { posX: 0, posY: 0, scale: 1.0, rotation: 0 };
+      adjustPanel.querySelector(`[data-prop="posX"]`).value = 0;
+      adjustPanel.querySelector(`#val-posx-${idx}`).textContent = '0px';
+      adjustPanel.querySelector(`[data-prop="posY"]`).value = 0;
+      adjustPanel.querySelector(`#val-posy-${idx}`).textContent = '0px';
+      adjustPanel.querySelector(`[data-prop="scale"]`).value = 100;
+      adjustPanel.querySelector(`#val-scale-${idx}`).textContent = '100%';
+      adjustPanel.querySelector(`[data-prop="rotation"]`).value = 0;
+      adjustPanel.querySelector(`#val-rot-${idx}`).textContent = '0°';
+      redrawCollage();
+    });
+
     controls.appendChild(label);
     controls.appendChild(modeBtns);
+    controls.appendChild(adjustToggle);
+    controls.appendChild(adjustPanel);
+
     item.appendChild(thumbCanvas);
     item.appendChild(controls);
     container.appendChild(item);

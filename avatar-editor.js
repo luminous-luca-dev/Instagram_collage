@@ -165,11 +165,16 @@ class AvatarEditor {
     // main: 顔サイズ(FACE_RADIUS*2)比のオフセット%
     // sub: mainサイズ比のオフセット%
     const part = this.dragging;
+
+    // 表示スケール（CSSでwrapperが縮小されている場合に補正）
+    const wrapper = document.querySelector('.avatar-preview-wrapper');
+    const displayScale = wrapper ? wrapper.offsetWidth / PREVIEW_SIZE : 1;
+
     let divisor;
     if (part === 'main') {
-      divisor = FACE_RADIUS * 2; // 顔直径
+      divisor = FACE_RADIUS * 2 * displayScale; // 表示上の顔直径px
     } else {
-      const mainSizePx = FACE_RADIUS * 2 * (this.preset.main.size / 100);
+      const mainSizePx = FACE_RADIUS * 2 * (this.preset.main.size / 100) * displayScale;
       divisor = mainSizePx;
     }
 

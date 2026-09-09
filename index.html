@@ -104,14 +104,48 @@
           <h2 class="section-title">👤 顔処理設定</h2>
           <div class="face-status" id="face-status">
             <div class="status-dot loading" id="status-dot"></div>
-            <span id="face-status-text">顔検出モデル読み込み中…</span>
+            <span id="face-status-text">起動中…</span>
+          </div>
+          <!-- ロード進捗ゲージ -->
+          <div class="model-progress" id="model-progress">
+            <div class="model-progress-bar">
+              <div class="model-progress-fill" id="model-progress-fill"></div>
+            </div>
+            <div class="model-steps" id="model-steps">
+              <span class="model-step" id="step-faceapi">📦 face-api.js</span>
+              <span class="model-step" id="step-ssd">🧠 顔検出モデル</span>
+              <span class="model-step" id="step-tiny">⚡ 高速モデル</span>
+              <span class="model-step" id="step-emoji">😆 絵文字画像</span>
+            </div>
           </div>
 
           <div class="control-group">
-            <label class="control-label">モザイク強度</label>
+            <label class="control-label">モザイクの種類</label>
+            <div class="mosaic-types" id="mosaic-types">
+              <button type="button" class="mosaic-type-btn active" data-type="pixel">
+                <span class="m-icon">🔲</span>
+                <span class="m-label">ピクセル</span>
+              </button>
+              <button type="button" class="mosaic-type-btn" data-type="blur">
+                <span class="m-icon">💧</span>
+                <span class="m-label">ぼかし</span>
+              </button>
+              <button type="button" class="mosaic-type-btn" data-type="hex">
+                <span class="m-icon">⬡</span>
+                <span class="m-label">ハニカム</span>
+              </button>
+              <button type="button" class="mosaic-type-btn" data-type="frosted">
+                <span class="m-icon">❄️</span>
+                <span class="m-label">すりガラス</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">モザイク強度 / ぼかし具合</label>
             <div class="slider-row">
-              <input type="range" id="mosaic-strength" min="4" max="30" value="12" step="2" class="slider" />
-              <span class="slider-value" id="mosaic-value">12</span>
+              <input type="range" id="mosaic-strength" min="4" max="80" value="16" step="2" class="slider" />
+              <span class="slider-value" id="mosaic-value">16</span>
             </div>
           </div>
 

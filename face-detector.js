@@ -91,14 +91,14 @@ class FaceDetector {
    * @param {number} cropY             - 元画像のクロップ開始Y
    * @returns {Promise<Array>}
    */
-  async detectInCell(imgEl, cell, scaleX, scaleY, cropX, cropY) {
+  async detectInCell(imgEl, cell, scaleX, scaleY, offsetX = 0, offsetY = 0) {
     const faces = await this.detect(imgEl);
 
     return faces.map((f, i) => ({
       id: `face_${imgEl._photoId || 0}_${i}`,
-      // コラージュCanvas上の座標に変換
-      x: cell.x + (f.x - cropX) * scaleX,
-      y: cell.y + (f.y - cropY) * scaleY,
+      // コラージュCanvas上の座標に変換（写真の描画オフセット + スケール適用座標）
+      x: cell.x + offsetX + f.x * scaleX,
+      y: cell.y + offsetY + f.y * scaleY,
       width: f.width * scaleX,
       height: f.height * scaleY,
       score: f.score,
