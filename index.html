@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Story Collage Maker | インスタストーリー用コラージュ作成</title>
+  <meta name="description" content="インスタグラムのストーリー用縦16:9コラージュを自動作成。顔検出・モザイク・オリジナルアバター機能搭載。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ヘッダー -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">📸</span>
+        <span class="logo-text">Story Collage Maker</span>
+      </div>
+      <p class="logo-sub">インスタストーリー用コラージュ自動作成</p>
+    </div>
+  </header>
+
+  <!-- タブナビゲーション -->
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" id="tab-collage" role="tab" aria-selected="true" aria-controls="panel-collage">
+      <span class="tab-icon">🖼️</span>
+      <span>コラージュ編集</span>
+    </button>
+    <button class="tab-btn" id="tab-avatar" role="tab" aria-selected="false" aria-controls="panel-avatar">
+      <span class="tab-icon">😆</span>
+      <span>アバター設定</span>
+    </button>
+  </nav>
+
+  <!-- ==============================
+       タブ1: コラージュ編集
+  ============================== -->
+  <main id="panel-collage" class="tab-panel active" role="tabpanel" aria-labelledby="tab-collage">
+    <div class="editor-layout">
+
+      <!-- 左サイドパネル -->
+      <aside class="side-panel left-panel">
+
+        <!-- 写真追加 -->
+        <section class="panel-section" id="section-upload">
+          <h2 class="section-title">📁 写真を追加</h2>
+          <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="写真をドロップまたはクリックして追加">
+            <div class="drop-zone-icon">⬆️</div>
+            <p class="drop-zone-text">ドラッグ＆ドロップ<br />またはクリックして選択</p>
+            <input type="file" id="file-input" accept="image/*" multiple hidden />
+          </div>
+          <!-- アップロード済み写真サムネイル -->
+          <div class="photo-list" id="photo-list"></div>
+        </section>
+
+        <!-- レイアウト設定 -->
+        <section class="panel-section" id="section-layout">
+          <h2 class="section-title">⚙️ レイアウト設定</h2>
+
+          <div class="control-group">
+            <label class="control-label" for="photo-count">1枚に含める写真の枚数</label>
+            <div class="number-stepper">
+              <button class="stepper-btn" id="count-minus" aria-label="枚数を減らす">−</button>
+              <span class="stepper-value" id="photo-count-display">4</span>
+              <button class="stepper-btn" id="count-plus" aria-label="枚数を増やす">＋</button>
+            </div>
+            <input type="hidden" id="photo-count" value="4" min="1" max="9" />
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="gap-slider">写真間の隙間（背景幅）</label>
+            <div class="slider-row">
+              <input type="range" id="gap-slider" min="0" max="60" value="12" step="2" class="slider" />
+              <span class="slider-value" id="gap-value">12px</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="bg-color">背景色</label>
+            <div class="color-row">
+              <input type="color" id="bg-color" value="#1a1a2e" class="color-picker" />
+              <div class="color-presets" id="color-presets">
+                <button class="color-preset" style="background:#1a1a2e" data-color="#1a1a2e" title="ダークネイビー"></button>
+                <button class="color-preset" style="background:#ffffff" data-color="#ffffff" title="ホワイト"></button>
+                <button class="color-preset" style="background:#000000" data-color="#000000" title="ブラック"></button>
+                <button class="color-preset" style="background:#f5e6d3" data-color="#f5e6d3" title="クリーム"></button>
+                <button class="color-preset" style="background:#2d1b69" data-color="#2d1b69" title="パープル"></button>
+                <button class="color-preset" style="background:#0d3b2e" data-color="#0d3b2e" title="ダークグリーン"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="corner-radius-slider">写真の角丸</label>
+            <div class="slider-row">
+              <input type="range" id="corner-radius-slider" min="0" max="40" value="8" step="2" class="slider" />
+              <span class="slider-value" id="corner-radius-value">8px</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 顔処理設定 -->
+        <section class="panel-section" id="section-face">
+          <h2 class="section-title">👤 顔処理設定</h2>
+          <div class="face-status" id="face-status">
+            <div class="status-dot loading" id="status-dot"></div>
+            <span id="face-status-text">顔検出モデル読み込み中…</span>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">モザイク強度</label>
+            <div class="slider-row">
+              <input type="range" id="mosaic-strength" min="4" max="30" value="12" step="2" class="slider" />
+              <span class="slider-value" id="mosaic-value">12</span>
+            </div>
+          </div>
+
+          <!-- 検出された顔一覧 -->
+          <div class="detected-faces" id="detected-faces">
+            <p class="faces-hint">写真を追加すると顔が自動検出されます</p>
+          </div>
+        </section>
+      </aside>
+
+      <!-- 中央プレビューエリア -->
+      <section class="preview-area" id="preview-area">
+        <div class="canvas-wrapper" id="canvas-wrapper">
+          <canvas id="collage-canvas"></canvas>
+          <!-- アバター調整オーバーレイ（個別微調整用） -->
+          <div class="avatar-overlays" id="avatar-overlays"></div>
+        </div>
+        <div class="preview-controls">
+          <button class="btn btn-secondary" id="btn-refresh">🔄 再生成</button>
+          <button class="btn btn-primary" id="btn-download">⬇️ ダウンロード</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ==============================
+       タブ2: アバター設定（プリセットエディタ）
+  ============================== -->
+  <main id="panel-avatar" class="tab-panel" role="tabpanel" aria-labelledby="tab-avatar">
+    <div class="avatar-editor-layout">
+
+      <!-- エディタ左：設定パネル -->
+      <aside class="avatar-settings-panel">
+        <h2 class="section-title">😆 アバタープリセット設定</h2>
+        <p class="hint-text">顔に被せるアバターの各パーツのサイズ・位置・角度を設定します。<br />設定は自動保存されます。</p>
+
+        <!-- 😆 設定 -->
+        <div class="avatar-part-settings" id="settings-emoji-main">
+          <h3 class="part-title">😆 メイン絵文字</h3>
+
+          <div class="control-group">
+            <label class="control-label" for="main-emoji-input">絵文字</label>
+            <input type="text" id="main-emoji-input" class="emoji-input" value="😆" maxlength="2" />
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="main-size-slider">サイズ（顔サイズ比）</label>
+            <div class="slider-row">
+              <input type="range" id="main-size-slider" min="40" max="200" value="100" step="5" class="slider" />
+              <span class="slider-value" id="main-size-value">100%</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">X オフセット（中心からのずれ）</label>
+            <div class="slider-row">
+              <input type="range" id="main-offset-x" min="-50" max="50" value="0" step="1" class="slider" />
+              <span class="slider-value" id="main-offset-x-value">0%</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">Y オフセット</label>
+            <div class="slider-row">
+              <input type="range" id="main-offset-y" min="-50" max="50" value="0" step="1" class="slider" />
+              <span class="slider-value" id="main-offset-y-value">0%</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="main-rotate-slider">回転角度</label>
+            <div class="slider-row">
+              <input type="range" id="main-rotate-slider" min="-45" max="45" value="0" step="1" class="slider" />
+              <span class="slider-value" id="main-rotate-value">0°</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 👓 設定 -->
+        <div class="avatar-part-settings" id="settings-emoji-sub">
+          <h3 class="part-title">👓 サブ絵文字（おでこ）</h3>
+
+          <div class="control-group">
+            <label class="control-label" for="sub-emoji-input">絵文字</label>
+            <input type="text" id="sub-emoji-input" class="emoji-input" value="👓" maxlength="2" />
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="sub-size-slider">サイズ（😆サイズ比）</label>
+            <div class="slider-row">
+              <input type="range" id="sub-size-slider" min="20" max="100" value="60" step="5" class="slider" />
+              <span class="slider-value" id="sub-size-value">60%</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">X オフセット（😆中心基準）</label>
+            <div class="slider-row">
+              <input type="range" id="sub-offset-x" min="-80" max="80" value="0" step="1" class="slider" />
+              <span class="slider-value" id="sub-offset-x-value">0%</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">Y オフセット（😆中心基準）</label>
+            <div class="slider-row">
+              <input type="range" id="sub-offset-y" min="-80" max="80" value="-60" step="1" class="slider" />
+              <span class="slider-value" id="sub-offset-y-value">-60%</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="sub-rotate-slider">回転角度</label>
+            <div class="slider-row">
+              <input type="range" id="sub-rotate-slider" min="-45" max="45" value="0" step="1" class="slider" />
+              <span class="slider-value" id="sub-rotate-value">0°</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="avatar-actions">
+          <button class="btn btn-secondary" id="btn-reset-avatar">↩️ デフォルトに戻す</button>
+          <button class="btn btn-primary" id="btn-save-avatar">💾 保存</button>
+        </div>
+      </aside>
+
+      <!-- エディタ右：プレビュー -->
+      <section class="avatar-preview-section">
+        <h2 class="section-title">プレビュー</h2>
+        <p class="hint-text">プレビュー上でパーツをドラッグして位置調整できます</p>
+        <div class="avatar-preview-wrapper">
+          <canvas id="avatar-preview-canvas" width="300" height="300"></canvas>
+          <!-- ドラッグ操作用オーバーレイ -->
+          <div class="avatar-drag-overlay" id="avatar-drag-overlay">
+            <div class="drag-handle" id="drag-main" data-part="main" title="😆をドラッグで移動">
+              <span class="drag-emoji" id="drag-main-emoji">😆</span>
+            </div>
+            <div class="drag-handle" id="drag-sub" data-part="sub" title="👓をドラッグで移動">
+              <span class="drag-emoji" id="drag-sub-emoji">👓</span>
+            </div>
+          </div>
+        </div>
+        <p class="save-indicator" id="save-indicator">✅ 保存済み</p>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ローディングオーバーレイ -->
+  <div class="loading-overlay" id="loading-overlay" hidden>
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <p id="loading-text">処理中…</p>
+    </div>
+  </div>
+
+  <!-- スクリプト -->
+  <!-- face-api.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script src="avatar.js"></script>
+  <script src="avatar-editor.js"></script>
+  <script src="face-detector.js"></script>
+  <script src="collage.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
