@@ -728,16 +728,33 @@ function initPreviewButtons() {
     redrawCollage();
   });
 
-  // ダウンロード
-  document.getElementById('btn-download')?.addEventListener('click', () => {
-    // 最終描画（最高品質）
-    redrawCollage();
+  // ダウンロード（2K高解像度 1440 × 2560 PNG画像ファイル）
+  document.getElementById('btn-download')?.addEventListener('click', async () => {
+    try {
+      showLoading('2K高解像度画像を書き出し中…');
 
-    const dataUrl = collageEngine.exportPNG();
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `story_collage_${Date.now()}.png`;
-    a.click();
+      // 2Kキャンバスで元写真の解像度を保持してレンダリング
+      const dataUrl = await collageEngine.exportHighResDataURL(AppState.faces, AppState.preset, 1440, 2560);
+
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `story_collage_2K_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('画像書き出しエラー:', err);
+      // フォールバック
+      const dataUrl = collageEngine.exportPNG();
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `story_collage_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } finally {
+      hideLoading();
+    }
   });
 }
 

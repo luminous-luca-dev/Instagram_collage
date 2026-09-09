@@ -443,10 +443,56 @@ class CollageEngine {
   }
 
   // =====================
-  // PNG エクスポート
+  // PNG / 高解像度（2K: 1440x2560）エクスポート
   // =====================
   exportPNG() {
     return this.canvas.toDataURL('image/png');
+  }
+
+  /**
+   * 2K解像度（1440 × 2560）でオフスクリーンキャンバスに高品質レンダリングしてDataURL(PNG)を返す
+   * ブラウザが拡張子無しのUUIDファイルとして誤認保存するのを防ぎ、確実に.pngとして保存させる
+   * @param {Array} faces
+   * @param {Object} preset
+   * @returns {string} DataURL
+   */
+  exportHighResDataURL(faces = [], preset = null, targetW = 1440, targetH = 2560) {
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = targetW;
+    offCanvas.height = targetH;
+    const offEngine = new CollageEngine(offCanvas);
+
+    offEngine.CANVAS_W = targetW;
+    offEngine.CANVAS_H = targetH;
+
+    const scaleFactor = targetW / this.CANVAS_W;
+
+    offEngine.photos = this.photos;
+    offEngine.config = {
+      ...this.config,
+      gap: this.config.gap * scaleFactor,
+      cornerRadius: this.config.cornerRadius * scaleFactor,
+    };
+
+    // 顔の位置・サイズも2K解像度にスケール変換
+    const scaledFaces = faces.map(f => ({
+      ...f,
+      x: f.x * scaleFactor,
+      y: f.y * scaleFactor,
+      width: f.width * scaleFactor,
+      height: f.height * scaleFactor,
+      override: f.override ? {
+        ...f.override,
+        posX: (f.override.posX || 0) * scaleFactor,
+        posY: (f.override.posY || 0) * scaleFactor,
+        scale: f.override.scale || 1.0,
+        rotation: f.override.rotation || 0,
+      } : { posX: 0, posY: 0, scale: 1.0, rotation: 0 }
+    }));
+
+    offEngine.draw(scaledFaces, preset);
+
+    return offCanvas.toDataURL('image/png');
   }
 
   /**
